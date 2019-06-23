@@ -1,5 +1,4 @@
 import os
-import time
 from datetime import datetime as dt
 
 from PIL import Image
@@ -133,38 +132,38 @@ def train_model():
 
 
 def predict(path_to_img):
+    # coping image to the separate directory
     img_save_folder = path_to_img.replace('.', '_')
     os.mkdir(img_save_folder)
-
-    # Don't touch this line
     root_folder_path = img_save_folder
-
     img_save_folder = img_save_folder + '/image'
     os.mkdir(img_save_folder)
-
     tar_img = img_save_folder + "/" + os.path.basename(path_to_img)
     shutil.copy(path_to_img, tar_img)
 
+    # loading model
     model = load_model(constants.IMG_MODEL)
-    # testing images
+
+    # preparing testing image
     test_data_gen = ImageDataGenerator(
         rescale=1. / size
     )
-
-    # testing images
     test_image_array_gen = test_data_gen.flow_from_directory(root_folder_path,
                                                              target_size=target_size,
                                                              class_mode='categorical',
                                                              seed=42)
 
+    # predicting of class
     classPos = model.predict_classes(test_image_array_gen[0][0])[0]
 
     return malware_list[classPos], model.predict_proba(test_image_array_gen[0][0])[0][classPos], model.predict_proba(test_image_array_gen[0][0])[0]
 
 
 def predict_jpg(img_jpg_path):
+    # saving jpg as png image
     img = Image.open(img_jpg_path + ".jpg")
     img.save(img_jpg_path + ".png")
+    # predicting
     v1, v2, v3 = predict(img_jpg_path + ".png")
     print "--------------------------------------------"
     print "File: %s" % img_jpg_path
