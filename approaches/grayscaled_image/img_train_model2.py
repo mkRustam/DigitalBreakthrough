@@ -21,18 +21,18 @@ from utils import constants
 
 logTag = 'Image'
 
-# malware categories
+# Список классов
 malware_list = ["Good", "Bad"]
-# number of output classes (i.e. fruits)
+# Кол-во классов
 output_n = len(malware_list)
-# image size to scale down to (original images are 100 x 100 px)
+# Размер изображения
 size = img_w_h
 img_width = size
 img_height = size
 target_size = (img_width, img_height)
-# image RGB channels number
+# Кол-во каналов RGB изображения
 channels = 3
-# path to image folders
+# Путь к датасету
 dataset_path = "/home/mkr/Desktop/projects/python/databases/Dataset/"
 train_image_files_path = dataset_path + "train/"
 valid_image_files_path = dataset_path + "valid/"
@@ -41,87 +41,86 @@ valid_image_files_path = dataset_path + "valid/"
 def train_model():
     start = dt.now()
 
-    ## input data augmentation/modification
-    # training images
+    ## Информация для модификации входящих данных
+    # Изображения для тренировки
     train_data_gen = ImageDataGenerator(
         rescale=1. / size
     )
-    # validation images
+    # Изображения для валидации
     valid_data_gen = ImageDataGenerator(
         rescale=1. / size
     )
 
-    ## getting data
-    # training images
+    ## Получаем данные
+    # Изображения для тренировки
     train_image_array_gen = train_data_gen.flow_from_directory(train_image_files_path,
                                                                target_size=target_size,
                                                                classes=malware_list,
                                                                class_mode='categorical',
                                                                seed=42)
 
-    # validation images
+    # Изображения для валидации
     valid_image_array_gen = valid_data_gen.flow_from_directory(valid_image_files_path,
                                                                target_size=target_size,
                                                                classes=malware_list,
                                                                class_mode='categorical',
                                                                seed=42)
 
-    ## model definition
-    # number of training samples
+    ## Описание модели
+    # Кол-во изображений для тренировки
     train_samples = train_image_array_gen.n
-    # number of validation samples
+    # Кол-во изображений для валидации
     valid_samples = valid_image_array_gen.n
-    # define batch size and number of epochs
+    # Инициализация параметров
     batch_size = 16
     epochs = 30
 
-    # initialise model
+    # Инициализация модели
     model = Sequential()
 
-    # add layers
-    # input layer
+    # Добавление слоев
+    # Входящий слой
     model.add(Conv2D(filters=32, kernel_size=(3, 3), padding='same', input_shape=(img_width, img_height, channels), activation='relu'))
-    # hiddel conv layer
+    # Скрытые слои
     model.add(Conv2D(filters=16, kernel_size=(3, 3), padding='same'))
     model.add(LeakyReLU(.5))
     model.add(BatchNormalization())
-    # using max pooling
+    # Усреднение значений фильтров. Обязателен после сверточных слоев;
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    # randomly switch off 25% of the nodes per epoch step to avoid overfitting
+    # Dropout по сути нужен для регуляризации. Рандомно сбрасывает 25% всех нодов за каждый epoch, чтобы избежать overfitting'а.
     model.add(Dropout(.25))
-    # flatten max filtered output into feature vector
+    # Обязателен перед Dense слоем
     model.add(Flatten())
-    # output features onto a dense layer
     model.add(Dense(units=100, activation='relu'))
-    # randomly switch off 25% of the nodes per epoch step to avoid overfitting
+    # Рандомно сбрасывает 50% всех нодов за каждый epoch, чтобы избежать overfitting'а
     model.add(Dropout(.5))
-    # output layer with the number of units equal to the number of categories
+    # Выходной слой. Размерность выходного пространства равная кол-ву классов
     model.add(Dense(units=output_n, activation='softmax'))
 
-    # compile the model
+    # Компиляция модели
     model.compile(loss='categorical_crossentropy',
                   metrics=['accuracy'],
                   optimizer=RMSprop(lr=1e-4, decay=1e-6))
 
-    # train the model
+    # Тренировка модели
     hist = model.fit_generator(
-        # training data
+        # Передаем данные для тренировки
         train_image_array_gen,
 
-        # epochs
+        # Доп параметры
         steps_per_epoch=train_samples // batch_size,
         epochs=epochs,
 
-        # validation data
+        # Данные для валидации
         validation_data=valid_image_array_gen,
         validation_steps=valid_samples // batch_size,
 
-        # print progress
+        # Коллбеки
         verbose=2,
         callbacks=[
-            # save best model after every epoch
+            # Сохраняем лучшую модель для после каждого эпоха
             ModelCheckpoint(constants.IMG_MODEL, save_best_only=True),
-            # only needed for visualising with TensorBoard
+            # Нужен для визуализации результатов
             TensorBoard(log_dir="logs")
         ]
     )
@@ -132,7 +131,7 @@ def train_model():
 
 
 def predict(path_to_img):
-    # coping image to the separate directory
+    # Копируем изображение в отдельную папку
     img_save_folder = path_to_img.replace('.', '_')
     os.mkdir(img_save_folder)
     root_folder_path = img_save_folder
@@ -141,10 +140,10 @@ def predict(path_to_img):
     tar_img = img_save_folder + "/" + os.path.basename(path_to_img)
     shutil.copy(path_to_img, tar_img)
 
-    # loading model
+    # Загружаем модель
     model = load_model(constants.IMG_MODEL)
 
-    # preparing testing image
+    # Подготавливаем тестируемое изображение в виде массива
     test_data_gen = ImageDataGenerator(
         rescale=1. / size
     )
@@ -153,17 +152,17 @@ def predict(path_to_img):
                                                              class_mode='categorical',
                                                              seed=42)
 
-    # predicting of class
+    # Предсказываем класс
     classPos = model.predict_classes(test_image_array_gen[0][0])[0]
 
     return malware_list[classPos], model.predict_proba(test_image_array_gen[0][0])[0][classPos], model.predict_proba(test_image_array_gen[0][0])[0]
 
 
 def predict_jpg(img_jpg_path):
-    # saving jpg as png image
+    # Сохраняем jpg как png
     img = Image.open(img_jpg_path + ".jpg")
     img.save(img_jpg_path + ".png")
-    # predicting
+    # Предсказываем класс
     v1, v2, v3 = predict(img_jpg_path + ".png")
     print "--------------------------------------------"
     print "File: %s" % img_jpg_path
